@@ -1,8 +1,6 @@
 /*
  * communication_serial_protocol.c
  *
- *  Created on: Aug 27, 2025
- *      Author: Matheus Markies
  */
 
 #include "communication_serial_protocol.h"
