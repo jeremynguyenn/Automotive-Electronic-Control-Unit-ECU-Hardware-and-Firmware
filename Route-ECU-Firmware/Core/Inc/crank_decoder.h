@@ -2,7 +2,6 @@
  * crank_decoder.h
  *
  *  Created on: Aug 20, 2025
- *      Author: Matheus Markies
  */
 
 #ifndef INC_CRANK_DECODER_H_

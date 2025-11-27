@@ -2,7 +2,6 @@
  * communication_serial_protocol.h
  *
  *  Created on: Aug 27, 2025
- *      Author: Matheus Markies
  */
 
 #ifndef INC_COMMUNICATION_SERIAL_PROTOCOL_H_

@@ -1,83 +1,110 @@
 /*
- * communication_serial_protocol.c
+ * injector_driver.c
  *
- *  Created on: Aug 27, 2025
- *      Author: Matheus Markies
+ * Created on: Aug 20, 2025
  */
 
-#include "communication_serial_protocol.h"
+#include "injector_driver.h"
 #include "main.h"
 
-void PROTOCOL_RX_Callback() {
-	PROTOCOL_RX_Buffer[PROTOCOL_Stream_Index++] = PROTOCOL_RX_Stream_Data;
-	last_rx_tick = HAL_GetTick();
-	protocol_status = RX;
-	HAL_UART_Receive_IT(&huart_instance, &PROTOCOL_RX_Stream_Data, 1);
+// ============================================================
+// Initialization
+// ============================================================
+void Injector_Init(void) {
+    // Starts PWM on all channels (with duty = 0)
+    HAL_TIM_PWM_Start(&htim1, INJECTOR_1_CHANNEL);
+    HAL_TIM_PWM_Start(&htim1, INJECTOR_2_CHANNEL);
+    HAL_TIM_PWM_Start(&htim1, INJECTOR_3_CHANNEL);
+    HAL_TIM_PWM_Start(&htim1, INJECTOR_4_CHANNEL);
+
+    __HAL_TIM_SET_COMPARE(&htim1, INJECTOR_1_CHANNEL, 0);
+    __HAL_TIM_SET_COMPARE(&htim1, INJECTOR_2_CHANNEL, 0);
+    __HAL_TIM_SET_COMPARE(&htim1, INJECTOR_3_CHANNEL, 0);
+    __HAL_TIM_SET_COMPARE(&htim1, INJECTOR_4_CHANNEL, 0);
 }
 
-void PROTOCOL_TX_Callback() {
-	if (protocol_status == FREE) {
-		protocol_status = WAITING;
-		send_tick = HAL_GetTick();
-	}
+// ============================================================
+// Schedule injection pulse (in ms)
+// ============================================================
+void Injector_SchedulePulse(uint8_t cylinder_index, float pulse_width_ms) {
+    if (pulse_width_ms <= 0.05f) return; // ignore very short pulses
+
+    // 1. Convert pulse width to timer ticks
+    uint32_t pulse_ticks = (uint32_t)(pulse_width_ms * 1000.0f *
+                                      (TIMER_CLOCK_FREQ_HZ / 1000000UL));
+
+    // 2. Configure timer/channel according to cylinder
+    switch (cylinder_index) {
+        case 0: // Injector 1
+        	htim1.Instance->ARR = pulse_ticks + 20;
+        	htim1.Instance->CCR1 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_1_CHANNEL);
+            break;
+
+        case 1: // Injector 2
+        	htim1.Instance->ARR = pulse_ticks + 20;
+        	htim1.Instance->CCR2 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_2_CHANNEL);
+            break;
+
+        case 2: // Injector 3
+        	htim1.Instance->ARR = pulse_ticks + 20;
+        	htim1.Instance->CCR1 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_3_CHANNEL);
+            break;
+
+        case 3: // Injector 4
+        	htim1.Instance->ARR = pulse_ticks + 20;
+        	htim1.Instance->CCR2 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_4_CHANNEL);
+            break;
+    }
 }
 
-void resetBuffers() {
-	PROTOCOL_RX_Stream_Data = 0;
-	PROTOCOL_Stream_Index = 0;
-	memset(PROTOCOL_RX_Buffer, 0, sizeof(PROTOCOL_RX_Buffer));
+void Injector_TestPulse(uint8_t cylinder_index, float pulse_width_ms) {
+    if (cylinder_index >= 4 || pulse_width_ms <= 0.0f || pulse_width_ms > 50.0f) {
+        return; // Invalid parameters
+    }
+
+    // 1. Convert pulse width in milliseconds to timer ticks (microseconds)
+    uint32_t pulse_ticks = (uint32_t)(pulse_width_ms * 1000.0f);
+
+    // 2. Select the correct timer/channel and trigger the pulse
+    switch (cylinder_index) {
+        case 0:
+        	htim1.Instance->ARR = pulse_ticks + 20;
+        	htim1.Instance->CCR1 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_1_CHANNEL);
+            break;
+
+        case 1:
+        	htim1.Instance->ARR = pulse_ticks + 20;
+            htim1.Instance->CCR2 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_2_CHANNEL);
+            break;
+
+        case 2:
+        	htim1.Instance->ARR = pulse_ticks + 20;
+        	htim1.Instance->CCR3 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_3_CHANNEL);
+            break;
+
+        case 3:
+        	htim1.Instance->ARR = pulse_ticks + 20;
+        	htim1.Instance->CCR4 = pulse_ticks;
+            HAL_TIM_OnePulse_Start(&htim1, INJECTOR_4_CHANNEL);
+            break;
+    }
 }
 
-uint8_t sendCommand(char command[], char answer[], uint32_t timeout) {
-	uint8_t ATisOK = 0;
-	send_tick = HAL_GetTick();
-
-	resetBuffers();
-
-	HAL_UART_Receive_IT(&huart_instance, &PROTOCOL_RX_Stream_Data, 1);
-
-	uint8_t commandBuffer[200] = { 0 };
-	memcpy(commandBuffer, (uint8_t*) command, strlen(command) + 1);
-
-	printf("Sending AT Command: \r\n");
-	printf(command);
-
-	uint32_t previousTick = HAL_GetTick();
-	while (!ATisOK && previousTick + timeout > HAL_GetTick()) {
-
-		if (HAL_GetTick() - last_send_at_timestamp >= SEND_AT_INTERVAL_MS) {
-			last_send_at_timestamp = HAL_GetTick();
-
-			if (protocol_status == FREE) {
-				HAL_UART_Transmit_IT(&huart_instance, commandBuffer,
-						sizeof(commandBuffer));
-			}
-
-			if (protocol_status >= WAITING) {
-				if (protocol_status == RX) {
-					if (strstr((char*) PROTOCOL_RX_Buffer, answer)) {
-						ATisOK = 1;
-					}
-				}
-			}
-
-		}
-		//HAL_Delay(50);
-	}
-
-	protocol_status = FREE;
-
-	if (!ATisOK) {
-		printf((char*) PROTOCOL_RX_Buffer);
-		printf("CMD Timeout...\r\n");
-	}
-	return ATisOK;
-}
-
-void directTransmit(char *cmd) {
-	resetBuffers();
-	HAL_UART_Transmit(&huart_instance, (uint8_t*) cmd, strlen(cmd), 1000);
-	HAL_UART_Receive(&huart_instance, PROTOCOL_RX_Buffer, sizeof(PROTOCOL_RX_Buffer), 1000);
-
-	protocol_status = FREE;
+// ============================================================
+// Optional callback (safety) -> zeros duty after the pulse
+// ============================================================
+void Injector_TimerCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance == TIM1) {
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+        __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);
+    }
 }

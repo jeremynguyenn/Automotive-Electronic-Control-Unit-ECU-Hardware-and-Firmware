@@ -2,10 +2,8 @@
  * ecu_config.h
  *
  * Created on: 21 de ago de 2025
- * Author: Matheus Markies
  *
- * Estrutura de configuração central e tipos de dados para a ECU.
- * Define todos os parâmetros e tabelas de calibração.
+
  */
 
 #ifndef INC_ECU_CONFIG_H_
@@ -13,7 +11,6 @@
 
 #include <stdint.h>
 
-// --- TIPOS DE DADOS BÁSICOS ---
 
 typedef enum {
     SENSOR_TYPE_NONE = 0, SENSOR_TYPE_TPS, SENSOR_TYPE_CLT, SENSOR_TYPE_IAT,
@@ -24,7 +21,6 @@ typedef enum {
     SENSOR_INPUT_VR = 0, SENSOR_INPUT_HALL = 1
 } PositionSensorType_e;
 
-// --- ESTRUTURAS PARA TABELAS DE CALIBRAÇÃO ---
 
 typedef struct {
     int len;             // Número de pontos na tabela

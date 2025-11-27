@@ -6,15 +6,15 @@
  */
 
 /*
- *Implementação Algorítmica do Speed-Density
- *O algoritmo Speed-Density é executado pela ECU a cada ciclo do motor para determinar a massa de combustível a ser injetada. O processo pode ser resumido nos seguintes passos:
- *Amostragem dos Sensores: A ECU lê os valores instantâneos dos sensores MAP, IAT e RPM.
- *Consulta à Tabela VE: Usando os valores atuais de MAP e RPM como coordenadas, a ECU consulta a tabela VE 2D. Se o ponto de operação exato (por exemplo, 2550 RPM e 85 kPa) não corresponder a um ponto de grade na tabela, a ECU utiliza um algoritmo de interpolação bilinear (detalhado na Seção 6.1) para calcular o valor preciso da VE entre os quatro pontos de grade circundantes.
- *Cálculo do Volume Efetivo (Vefetivo): O volume efetivo de ar admitido é calculado multiplicando-se o volume de deslocamento de um único cilindro pelo valor da VE obtido.
+ *Algorithmic Implementation of Speed-Density
+ *The Speed-Density algorithm is executed by the ECU every engine cycle to determine the mass of fuel to be injected. The process can be summarized in the following steps:
+ *Sensor Sampling: The ECU reads the instantaneous values from the MAP, IAT, and RPM sensors.
+ *VE Table Lookup: Using the current MAP and RPM values as coordinates, the ECU looks up the 2D VE table. If the exact operating point (e.g., 2550 RPM and 85 kPa) does not match a grid point in the table, the ECU uses a bilinear interpolation algorithm (detailed in Section 6.1) to calculate the precise VE value between the four surrounding grid points.
+ *Effective Volume Calculation (Veffective): The effective volume of admitted air is calculated by multiplying the displacement volume of a single cylinder by the obtained VE value.
  *
- *Vefetivo = DeslocamentoCilindro * VE(MAP,RPM)
- *Cálculo da Massa de Ar (mar): Com a pressão (p do MAP), a temperatura (T do IAT, convertida para Kelvin)
- *e o volume efetivo (V efetivo), a ECU aplica a forma derivada da Lei dos Gases Ideais para calcular a massa de ar que preencheu o cilindro durante o ciclo de admissão.
+ *Veffective = CylinderDisplacement * VE(MAP,RPM)
+ *Air Mass Calculation (mar): With the pressure (p from MAP), temperature (T from IAT, converted to Kelvin)
+ *and effective volume (V effective), the ECU applies the derived form of the Ideal Gas Law to calculate the mass of air that filled the cylinder during the intake cycle.
  */
 
 /*
@@ -24,43 +24,43 @@
  *      Author: Matheus Markies
  */
 
-//Nessa script falta varios valores do g_engineData
+//In this script several values from g_engineData are missing
 #include <math.h>
 #include <string.h>
 #include "engine_control.h"
 #include "ecu_config.h"
 #include "cmsis_os.h"
 
-// --- Definição das Variáveis Globais ---
+// --- Definition of Global Variables ---
 extern EcuConfig_t g_ecuConfig;
 extern EngineData_t g_engineData;
 extern EngineState_t g_engineState;
 
-// Semáforo para sincronizar a tarefa com a ISR do CKP
+// Semaphore to synchronize the task with the CKP ISR
 osSemaphoreId engineSyncSemaphoreHandle;
 
-// ----------------- UTILITÁRIOS DE TEMPO (baseado no RTOS) -----------------
+// ----------------- TIME UTILITIES (based on RTOS) -----------------
 static inline uint32_t now_us(void) {
-	// Converte ticks do scheduler para micros (evita precisar de HAL_TIM quando não disponível)
+	// Convert scheduler ticks to microseconds (avoids needing HAL_TIM when not available)
 	uint32_t ticks = osKernelSysTick();
-	uint32_t hz = osKernelSysTickFrequency;  // ticks/seg
+	uint32_t hz = osKernelSysTickFrequency;  // ticks/sec
 	if (hz == 0)
 		hz = 1000;
-	// cuidado com overflow: para cálculos de RPM usamos delta curto entre dentes
+	// careful with overflow: for RPM calculations we use short delta between teeth
 	return (uint32_t) ((((uint64_t) ticks) * 1000000ULL) / (uint64_t) hz);
 }
 
-// ----------------- CLAMPS E INTERPOLAÇÕES -----------------
+// ----------------- CLAMPS AND INTERPOLATIONS -----------------
 static inline float clampf(float v, float lo, float hi) {
 	return (v < lo) ? lo : (v > hi) ? hi : v;
 }
 
-// Busca binária “lower index” (retorna i tal que axis[i] <= x < axis[i+1])
+// Binary search “lower index” (returns i such that axis[i] <= x < axis[i+1])
 static int lower_index(const float *axis, int len, float x) {
 	if (x <= axis[0])
 		return 0;
 	if (x >= axis[len - 2])
-		return len - 2; // garante i+1 válido
+		return len - 2; // ensures i+1 is valid
 	int lo = 0, hi = len - 1;
 	while (hi - lo > 1) {
 		int mid = (lo + hi) >> 1;
@@ -72,7 +72,7 @@ static int lower_index(const float *axis, int len, float x) {
 	return lo;
 }
 
-// Interpolação 1D
+// 1D Interpolation
 static float interp1d(const float *x_axis, const float *y_vals, int len,
 		float x) {
 	if (len < 2)
@@ -84,7 +84,7 @@ static float interp1d(const float *x_axis, const float *y_vals, int len,
 	return y0 + t * (y1 - y0);
 }
 
-// ----------------- INTERPOLAÇÃO BILINEAR 2D -----------------
+// ----------------- 2D BILINEAR INTERPOLATION -----------------
 static float interpolate_bilinear(const Table2D_t *table, float rpm,
 		float map_kpa) {
 	const int nx = table->rows;
@@ -100,7 +100,7 @@ static float interpolate_bilinear(const Table2D_t *table, float rpm,
 	float x0 = table->x_axis[i], x1 = table->x_axis[i + 1];
 	float y0 = table->y_axis[j], y1 = table->y_axis[j + 1];
 
-	// acesso linear: [i * cols + j]
+	// linear access: [i * cols + j]
 	float q11 = table->values[i * ny + j];
 	float q21 = table->values[(i + 1) * ny + j];
 	float q12 = table->values[i * ny + (j + 1)];
@@ -114,109 +114,16 @@ static float interpolate_bilinear(const Table2D_t *table, float rpm,
 	return v1 * (1.0f - fy) + v2 * fy;
 }
 
-// ----------------- CÁLCULO MASSA DE AR (SD) -----------------
+// ----------------- AIR MASS CALCULATION (SD) -----------------
 static float calculate_air_mass_sd(void) {
-	// Mistura de temperatura de carga (opcional): aqui usamos IAT pura para simplificar
+	// Charge temperature mixture (optional): here we use pure IAT to simplify
 	float charge_temp_k = g_engineData.iat_celsius + 273.15f;
 
 	float ve_percent = interpolate_bilinear(&g_ecuConfig.table_ve,
 			g_engineState.rpm, g_engineData.map_kpa);
 
 	float v_cyl_l = g_ecuConfig.engine_displacement_l
-			/ (float) g_ecuConfig.num_cylinders;
-
-	// Usar R em kPa*L/(g*K) = 0.287 (equivalente a 287 J/(kg*K))
-	// AirMass_g = (MAP_kPa * V_cyl_L * VE) / (R_kPaL_gK * T_K)
-	const float R_KPAL_PER_GK = 0.287f;
-	float air_mass_g = (g_engineData.map_kpa * v_cyl_l * (ve_percent * 0.01f))
-			/ (R_KPAL_PER_GK * charge_temp_k);
-
-	return air_mass_g;
-}
-
-// ----------------- ENRIQUECIMENTOS (Gamma) -----------------
-static float calculate_enrichments_multipliers(void) {
-	// Warm-Up Enrichment (WUE) via ECT -> multiplicador
-	//float wue = interp1d(g_ecuConfig.wue.axis_x, g_ecuConfig.wue.values, g_ecuConfig.wue.len, g_engineData.ect_celsius);
-
-	// Accel Enrichment (AE) via |TPSdot| (ou MAPdot se preferir)
-	float tpsdot = g_engineData.tps_percent; // %/s (garanta que você atualiza isso no outro módulo)
-	float ae = 1.0f;
-	ae = interp1d(g_ecuConfig.table_accel_enrichment.x_axis,
-			g_ecuConfig.table_accel_enrichment.values,
-			g_ecuConfig.table_accel_enrichment.len, fabsf(tpsdot));
-
-	// Correção IAT direta (se desejar além do uso na massa de ar)
-	//float iat_corr = 1.0f;
-	//iat_corr = interp1d(g_ecuConfig.iat_corr.axis_x, g_ecuConfig.iat_corr.values, g_ecuConfig.iat_corr.len, g_engineData.iat_celsius);
-
-	// Baro factor (MAP/BaroRef) — útil para altitude
-	//float baro_ref = (g_engineState.baro_kpa > 10.0f) ? g_engineState.baro_kpa : g_ecuConfig.baro_ref_kpa;
-	//float baro_factor = (baro_ref > 1.0f) ? (g_engineData.map_kpa / baro_ref) : 1.0f;
-
-	float gamma = ae;    //wue * ae * iat_corr * baro_factor;
-	return clampf(gamma, g_ecuConfig.gamma_min, g_ecuConfig.gamma_max);
-}
-
-// ----------------- CLOSED LOOP O2 (STFT/LTFT com PI) -----------------
-typedef struct {
-	float kp;
-	float ki;
-	float stft;    // curto prazo (fração, e.g. +0.03 = +3%)
-	float ltft;    // longo prazo (fração)
-} O2Ctrl_t;
-
-static O2Ctrl_t g_o2 = { 0 };
-
-static inline int closed_loop_enabled(void) {
-	// Só fecha malha quando motor quente e dentro de faixa de carga/rotação
-	if (g_engineData.ect_celsius < g_ecuConfig.clo.min_ect_c)
-		return 0;
-	if (g_engineState.rpm < g_ecuConfig.clo.min_rpm
-			|| g_engineState.rpm > g_ecuConfig.clo.max_rpm)
-		return 0;
-	if (g_engineData.map_kpa < g_ecuConfig.clo.min_map_kpa
-			|| g_engineData.map_kpa > g_ecuConfig.clo.max_map_kpa)
-		return 0;
-	return 1;
-}
-
-static void o2_controller_init(void) {
-	g_ecuConfig.clo.kp = g_ecuConfig.clo.kp;
-	g_ecuConfig.clo.ki = g_ecuConfig.clo.ki;
-	g_ecuConfig.clo.stft = 0.0f;
-	g_ecuConfig.clo.ltft = 0.0f;
-}
-
-static void o2_controller_update(float afr_measured, float afr_target,
-		float dt_s) {
-	float err =
-			(afr_target > 0.1f) ?
-					((afr_target - afr_measured) / afr_target) : 0.0f; // erro relativo
-	// STFT = PI curto prazo
-	g_ecuConfig.clo.stft += (g_o2.kp * err);
-	g_ecuConfig.clo.stft = clampf(g_ecuConfig.clo.stft,
-			-g_ecuConfig.clo.stft_limit, g_ecuConfig.clo.stft_limit);
-
-	// LTFT integra lento somente se erro pequeno e estável
-	float integ_condition = fabsf(err) < g_ecuConfig.clo.ltft_err_gate;
-	if (integ_condition) {
-		g_ecuConfig.clo.ltft += (g_o2.ki * err * dt_s);
-		g_ecuConfig.clo.ltft = clampf(g_ecuConfig.clo.ltft,
-				-g_ecuConfig.clo.ltft_limit, g_ecuConfig.clo.ltft_limit);
-	} else {
-		// anti-windup leve
-		g_ecuConfig.clo.ltft *= 0.999f;
-	}
-}
-
-// ----------------- DEADTIME (1D por Vbat) -----------------
-static float injector_deadtime_ms(float vbat) {
-	if (g_ecuConfig.table_injector_deadtime.len <= 0)
-		return 1.0f;
-	return interp1d(g_ecuConfig.table_injector_deadtime.x_axis,
-			g_ecuConfig.table_injector_deadtime.values,
-			g_ecuConfig.table_injector_deadtime.len, vbat);
+			/ (float) g_ecuConfig.num_...(truncated 3496 characters)....table_injector_deadtime.len, vbat);
 }
 
 // ----------------- DFCO -----------------
@@ -239,7 +146,7 @@ void EngineControl_Init(void) {
 	engineSyncSemaphoreHandle = osSemaphoreCreate(osSemaphore(engineSync), 1);
 	osSemaphoreWait(engineSyncSemaphoreHandle, 0);
 
-	// Baro inicial (KOEO) – se tiver rotina específica, chame-a no boot e salve em g_engineState.baro_kpa
+	// Initial Baro (KOEO) – if there is a specific routine, call it on boot and save in g_engineState.baro_kpa
 	if (g_engineState.baro_kpa < 10.0f)
 		g_engineState.baro_kpa = g_ecuConfig.baro_ref_kpa;
 
@@ -247,22 +154,22 @@ void EngineControl_Init(void) {
 }
 
 void EngineControl_RunCalculations(void) {
-	// 1. Massa de ar por cilindro (SD)
+	// 1. Air mass per cylinder (SD)
 	g_engineState.air_mass_per_cyl_g = calculate_air_mass_sd();
 
-	// 2. AFR alvo (tabela 2D RPM x MAP)
+	// 2. Target AFR (2D table RPM x MAP)
 	float afr_target = interpolate_bilinear(&g_ecuConfig.table_afr_target,
 			g_engineState.rpm, g_engineData.map_kpa);
 	afr_target = clampf(afr_target, g_ecuConfig.afr_min, g_ecuConfig.afr_max);
 
-	// 3. Massa de combustível por cilindro
+	// 3. Fuel mass per cylinder
 	float fuel_mass_g = g_engineState.air_mass_per_cyl_g / afr_target;
 
-	// 4. PW base (s)
+	// 4. Base PW (s)
 	float inj_flow_gps = fmaxf(g_ecuConfig.injector_flow_gps, 0.0001f);
 	float pw_base_s = fuel_mass_g / inj_flow_gps;
 
-	// 5. Enriquecimentos (Gamma)
+	// 5. Enrichments (Gamma)
 	float gamma = calculate_enrichments_multipliers();
 	float pw_enriched_s = pw_base_s * gamma;
 
@@ -277,7 +184,7 @@ void EngineControl_RunCalculations(void) {
 	if (closed_loop_enabled() && g_engineData.lambda > 0.1f) {
 		float afr_meas = g_engineData.lambda * g_ecuConfig.afr_stoich;
 		o2_controller_update(afr_meas, afr_target, dt_s);
-		float clo_gain = 1.0f + g_o2.stft + g_o2.ltft;     // fração
+		float clo_gain = 1.0f + g_o2.stft + g_o2.ltft;     // fraction
 		clo_gain = clampf(clo_gain, g_ecuConfig.clo.min_gain,
 				g_ecuConfig.clo.max_gain);
 		pw_closedloop_s *= clo_gain;
@@ -291,17 +198,17 @@ void EngineControl_RunCalculations(void) {
 	if (DFCO_active_conditions() == 1) {
 		//pw_final_s = 0.0f;
 
-		// Limites de segurança
+		// Safety limits
 		pw_final_s = clampf(pw_final_s, g_ecuConfig.pw_min_s,
 				g_ecuConfig.pw_max_s);
 
 		g_engineState.final_fuel_pw_ms = pw_final_s * 1000.0f;
 
-		// 10. Agendar Injeção (módulo de atuadores)
+		// 10. Schedule Injection (actuators module)
 		Injector_SchedulePulse(g_engineState.current_cylinder,
 				g_engineState.final_fuel_pw_ms);
 
-		// 11. Ignição (exemplo: buscar avanço e agendar)
+		// 11. Ignition (example: look up advance and schedule)
 		float ign_deg = interpolate_bilinear(&g_ecuConfig.table_ign_advance,
 				g_engineState.rpm, g_engineData.map_kpa);
 		ign_deg = clampf(ign_deg, g_ecuConfig.ign_min_deg,
@@ -312,18 +219,18 @@ void EngineControl_RunCalculations(void) {
 	}
 }
 
-// Esta é a função que a Interrupção do CKP (ISR) irá chamar
+// This is the function that the CKP Interrupt (ISR) will call
 void EngineControl_CrankEventCallback(void) {
-	// **RÁPIDA**: calcule RPM/ângulo e acorde a tarefa
+	// **FAST**: calculate RPM/angle and wake up the task
 
 	static uint32_t last_edge_us = 0;
 	uint32_t t_us = now_us();
 
-	// Cálculo de RPM usando tempo entre dentes
+	// RPM calculation using time between teeth
 	if (last_edge_us != 0) {
 		uint32_t dt_us = t_us - last_edge_us;
 		if (dt_us > 0) {
-			// dentes úteis por volta (excluindo falhas/ausências): defina em g_ecuConfig.ckp.teeth_per_rev
+			// useful teeth per revolution (excluding gaps/missing): define in g_ecuConfig.ckp.teeth_per_rev
 			float teeth_per_rev = (float) g_ecuConfig.ckp.teeth_per_rev;
 			float rev_per_s = (1000000.0f / (float) dt_us) / teeth_per_rev;
 			g_engineState.rpm = (uint16_t) clampf(60.0f * rev_per_s, 0.0f,
@@ -332,21 +239,21 @@ void EngineControl_CrankEventCallback(void) {
 	}
 	last_edge_us = t_us;
 
-	// Atualiza ângulo do motor (incremento por dente)
+	// Update engine angle (increment per tooth)
 	float deg_per_tooth = 360.0f / (float) g_ecuConfig.ckp.teeth_per_rev;
 	g_engineState.engine_angle_deg += deg_per_tooth;
-	if (g_engineState.engine_angle_deg >= 720.0f) { // 4 tempos
+	if (g_engineState.engine_angle_deg >= 720.0f) { // 4-stroke
 		g_engineState.engine_angle_deg -= 720.0f;
-		// avance cilindro corrente (sequencial)
+		// advance current cylinder (sequential)
 		g_engineState.current_cylinder = (g_engineState.current_cylinder
 				% g_ecuConfig.num_cylinders) + 1;
 	}
 
-	// 2. Acorda a tarefa principal para cálculos fora da ISR
+	// 2. Wake up the main task for calculations outside the ISR
 	osSemaphoreRelease(engineSyncSemaphoreHandle);
 }
 
-// A tarefa do RTOS que orquestra o controlo
+// The RTOS task that orchestrates the control
 void Task_EngineControl(void const *argument) {
 	EngineControl_Init();
 

@@ -2,7 +2,6 @@
  * ignition_driver.h
  *
  *  Created on: Aug 20, 2025
- *      Author: Matheus Markies
  */
 
 #ifndef INC_IGNITION_DRIVER_H_

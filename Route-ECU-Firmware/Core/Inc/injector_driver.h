@@ -2,10 +2,8 @@
  * injector_driver.h
  *
  * Created on: 20 de ago de 2025
- * Author: Matheus Markies
  *
- * Driver para o controlador de injetor LM1949.
- * Utiliza timers de hardware para gerar pulsos de injeção precisos.
+
  */
 
 #ifndef INC_INJECTOR_DRIVER_H_

@@ -2,7 +2,6 @@
  * engine_sensors.c
  *
  *  Created on: Aug 19, 2025
- *      Author: Matheus Markies
  */
 
 #include "engine_sensors.h"
@@ -61,12 +60,12 @@ void ProcessSensorData(void) {
     g_adc_conversion_complete = 0;
 }
 
-// Esta é a tarefa do RTOS que irá ler e processar os sensores
+// This is the RTOS task that will read and process the sensors
 void Task_ReadSensors(void const * argument) {
     uint32_t last_tick = osKernelSysTick();
 
     for(;;) {
-        // Esta tarefa executa a cada 20ms
+        // This task runs every 20ms
         osDelayUntil(&last_tick, 20);
 
         if (g_adc_conversion_complete) {
@@ -76,9 +75,9 @@ void Task_ReadSensors(void const * argument) {
     }
 }
 
-// A interrupção de callback do DMA continua a mesma
+// The DMA callback interrupt remains the same
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-    if (hadc->Instance == ADC1) { // Verifica se é o ADC dos sensores
+    if (hadc->Instance == ADC1) { // Check if it is the sensor ADC
         g_adc_conversion_complete = 1;
     }
 }

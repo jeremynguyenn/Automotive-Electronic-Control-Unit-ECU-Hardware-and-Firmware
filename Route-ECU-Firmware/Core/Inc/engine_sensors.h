@@ -2,7 +2,6 @@
  * engine_sensors.h
  *
  *  Created on: Aug 19, 2025
- *      Author: Matheus Markies
  */
 
 #ifndef INC_ENGINE_SENSORS_H_
