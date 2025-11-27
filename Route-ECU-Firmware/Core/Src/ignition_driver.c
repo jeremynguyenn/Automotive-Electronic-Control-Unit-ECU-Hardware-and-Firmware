@@ -6,8 +6,8 @@
 #include "ignition_driver.h"
 #include "main.h"
 
-// --- Definição das Variáveis Globais ---
-extern EcuConfig_t  g_ecuConfig;
+// --- Definition of Global Variables ---
+extern EcuConfig_t  g_ecuConfig;t
 extern EngineData_t g_engineData;
 extern EngineState_t g_engineState;
 
@@ -24,7 +24,7 @@ void Ignition_Init(void) {
 }
 
 // ============================================================
-// Agenda o disparo da faísca
+// Schedule the spark trigger.
 // ============================================================
 void Ignition_ScheduleSpark(uint8_t cylinder_index, float advance_deg, float dwell_ms) {
     if (g_engineState.rpm < 200) return;
@@ -59,26 +59,27 @@ void Ignition_ScheduleSpark(uint8_t cylinder_index, float advance_deg, float dwe
 }
 
 /**
- * @brief Dispara um único pulso de teste numa bobina de ignição específica.
+ * @brief It sends a single test pulse to a specific ignition coil.
  */
 void Ignition_TestPulse(uint8_t cylinder_index, float dwell_ms) {
-    // Validação de segurança básica
+    // Basic safety validation
     if (cylinder_index >= 4 || dwell_ms <= 0.0f || dwell_ms > 10.0f) {
-        return; // Parâmetros inválidos
+        return; // Invalid parameters
     }
 
-    // 1. Converte o dwell em milissegundos para ticks do nosso timer (que são microssegundos)
-    // Usamos a constante TIMER_CLOCK_FREQ_HZ definida no cabeçalho.
+    // 1. Converts the dwell time from milliseconds to ticks of our timer (which are microseconds)
+    // We use the TIMER_CLOCK_FREQ_HZ constant defined in the header.
+    
     uint32_t pulse_ticks = (uint32_t)(dwell_ms * 1000.0f);
 
-    // 2. Seleciona o canal do timer correto e dispara um único pulso
+    //2. Select the correct timer channel and trigger a single pulse.
     switch (cylinder_index) {
         case 0:
-            // Configura o Período (ARR) e o Compare (CCR) para gerar um único pulso
-            // com a duração exata do dwell.
-            htim4.Instance->ARR = pulse_ticks + 10; // Período ligeiramente maior para garantir o pulso completo
-            htim4.Instance->CCR1 = pulse_ticks;     // Largura do pulso para o Canal 1
-            // Inicia o timer em modo "One-Pulse". O hardware gera o pulso e para automaticamente.
+            // Configures the Period (ARR) and Compare (CCR) to generate a single pulse.
+            // with the exact dwell duration.
+            htim4.Instance->ARR = pulse_ticks + 10; // Slightly longer period to ensure a full pulse
+            htim4.Instance->CCR1 = pulse_ticks;     // Pulse width for Channel 1
+            // Starts the timer in "One-Pulse" mode. The hardware generates the pulse and stops automatically.
             HAL_TIM_OnePulse_Start(&htim4, IGNITION_COIL_1_CHANNEL);
             break;
         case 1:
@@ -100,7 +101,7 @@ void Ignition_TestPulse(uint8_t cylinder_index, float dwell_ms) {
 }
 
 // ============================================================
-// Callbacks de segurança (desliga PWM depois do pulso)
+// Safety callbacks (turns off PWM after pulse)
 // ============================================================
 void Ignition_TimerCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM1) {
@@ -112,10 +113,10 @@ void Ignition_TimerCallback(TIM_HandleTypeDef *htim) {
 }
 
 // ============================================================
-// Funções auxiliares
+// Auxiliary functions
 // ============================================================
 
-// Converte graus de rotação em microssegundos
+//Converts degrees of rotation into microseconds.
 uint32_t DegreesToTimeUs(float degrees) {
     float rev_per_ms = (float)g_engineState.rpm / 60000.0f;
     float time_per_rev_ms = 1.0f / rev_per_ms;
@@ -123,7 +124,7 @@ uint32_t DegreesToTimeUs(float degrees) {
     return (uint32_t)(degrees * time_per_deg_ms * 1000.0f);
 }
 
-// Compensa o dwell pela tensão da bateria (tabela simplificada)
+// Compensates for dwell time based on battery voltage (simplified table)
 uint32_t ApplyDwellCompensation(float dwell_ms, float vbat) {
     if (vbat < 10.0f) return dwell_ms * 1.3f;
     if (vbat < 12.0f) return dwell_ms * 1.1f;
