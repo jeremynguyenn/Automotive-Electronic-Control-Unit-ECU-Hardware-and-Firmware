@@ -1,8 +1,6 @@
 /*
  * engine_sensors.c
  *
- *  Created on: Aug 19, 2025
- *      Author: Matheus Markies
  */
 
 #include "engine_sensors.h"
