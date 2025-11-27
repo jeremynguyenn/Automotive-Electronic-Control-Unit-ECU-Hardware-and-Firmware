@@ -1,8 +1,6 @@
 /*
  * ignition_driver.c
  *
- * Created on: 20 de ago de 2025
- * Author: Matheus Markies
  */
 
 #include "ignition_driver.h"
