@@ -1,14 +1,21 @@
 /*
  * ignition_driver.c
  *
+<<<<<<< HEAD
  * Created on: Aug 20, 2025
+=======
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
  */
 
 #include "ignition_driver.h"
 #include "main.h"
 
 // --- Definition of Global Variables ---
+<<<<<<< HEAD
 extern EcuConfig_t  g_ecuConfig;
+=======
+extern EcuConfig_t  g_ecuConfig;t
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
 extern EngineData_t g_engineData;
 extern EngineState_t g_engineState;
 
@@ -25,7 +32,11 @@ void Ignition_Init(void) {
 }
 
 // ============================================================
+<<<<<<< HEAD
 // Schedule the spark firing
+=======
+// Schedule the spark trigger.
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
 // ============================================================
 void Ignition_ScheduleSpark(uint8_t cylinder_index, float advance_deg, float dwell_ms) {
     if (g_engineState.rpm < 200) return;
@@ -60,7 +71,11 @@ void Ignition_ScheduleSpark(uint8_t cylinder_index, float advance_deg, float dwe
 }
 
 /**
+<<<<<<< HEAD
  * @brief Triggers a single test pulse on a specific ignition coil.
+=======
+ * @brief It sends a single test pulse to a specific ignition coil.
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
  */
 void Ignition_TestPulse(uint8_t cylinder_index, float dwell_ms) {
     // Basic safety validation
@@ -68,6 +83,7 @@ void Ignition_TestPulse(uint8_t cylinder_index, float dwell_ms) {
         return; // Invalid parameters
     }
 
+<<<<<<< HEAD
     // 1. Convert dwell in milliseconds to ticks of our timer (which are microseconds)
     // We use the constant TIMER_CLOCK_FREQ_HZ defined in the header.
     uint32_t pulse_ticks = (uint32_t)(dwell_ms * 1000.0f);
@@ -80,6 +96,21 @@ void Ignition_TestPulse(uint8_t cylinder_index, float dwell_ms) {
             htim4.Instance->ARR = pulse_ticks + 10; // Period slightly larger to ensure complete pulse
             htim4.Instance->CCR1 = pulse_ticks;     // Pulse width for Channel 1
             // Start the timer in "One-Pulse" mode. The hardware generates the pulse and stops automatically.
+=======
+    // 1. Converts the dwell time from milliseconds to ticks of our timer (which are microseconds)
+    // We use the TIMER_CLOCK_FREQ_HZ constant defined in the header.
+    
+    uint32_t pulse_ticks = (uint32_t)(dwell_ms * 1000.0f);
+
+    //2. Select the correct timer channel and trigger a single pulse.
+    switch (cylinder_index) {
+        case 0:
+            // Configures the Period (ARR) and Compare (CCR) to generate a single pulse.
+            // with the exact dwell duration.
+            htim4.Instance->ARR = pulse_ticks + 10; // Slightly longer period to ensure a full pulse
+            htim4.Instance->CCR1 = pulse_ticks;     // Pulse width for Channel 1
+            // Starts the timer in "One-Pulse" mode. The hardware generates the pulse and stops automatically.
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
             HAL_TIM_OnePulse_Start(&htim4, IGNITION_COIL_1_CHANNEL);
             break;
         case 1:
@@ -101,7 +132,11 @@ void Ignition_TestPulse(uint8_t cylinder_index, float dwell_ms) {
 }
 
 // ============================================================
+<<<<<<< HEAD
 // Safety callbacks (turn off PWM after the pulse)
+=======
+// Safety callbacks (turns off PWM after pulse)
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
 // ============================================================
 void Ignition_TimerCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM1) {
@@ -116,7 +151,11 @@ void Ignition_TimerCallback(TIM_HandleTypeDef *htim) {
 // Auxiliary functions
 // ============================================================
 
+<<<<<<< HEAD
 // Converts degrees of rotation to microseconds
+=======
+//Converts degrees of rotation into microseconds.
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
 uint32_t DegreesToTimeUs(float degrees) {
     float rev_per_ms = (float)g_engineState.rpm / 60000.0f;
     float time_per_rev_ms = 1.0f / rev_per_ms;
@@ -124,7 +163,11 @@ uint32_t DegreesToTimeUs(float degrees) {
     return (uint32_t)(degrees * time_per_deg_ms * 1000.0f);
 }
 
+<<<<<<< HEAD
 // Compensates dwell by battery voltage (simplified table)
+=======
+// Compensates for dwell time based on battery voltage (simplified table)
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
 uint32_t ApplyDwellCompensation(float dwell_ms, float vbat) {
     if (vbat < 10.0f) return dwell_ms * 1.3f;
     if (vbat < 12.0f) return dwell_ms * 1.1f;

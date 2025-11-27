@@ -1,7 +1,10 @@
 /*
  * engine_sensors.c
  *
+<<<<<<< HEAD
  *  Created on: Aug 19, 2025
+=======
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
  */
 
 #include "engine_sensors.h"

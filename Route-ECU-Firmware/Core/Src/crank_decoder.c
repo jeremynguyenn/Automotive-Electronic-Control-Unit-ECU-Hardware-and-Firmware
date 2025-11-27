@@ -1,7 +1,10 @@
 /*
  * crank_decoder.c
  *
+<<<<<<< HEAD
  *  Created on: Aug 20, 2025
+=======
+>>>>>>> 6da437a2b5ecaab585351f10c0837700ec4ca60e
  */
 
 

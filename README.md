@@ -5,13 +5,6 @@
 
 ---
 
-**Version:** 1.0  
-**Date:** September 2025  
-**Classification:** Technical Document  
-**Status:** In Development  
-
----
-
 ## 1. GENERAL INFORMATION
 
 ### 1.1 Application
